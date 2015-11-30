@@ -9,7 +9,7 @@ import sys
 import os
 import rg_parse
 from dulwich.repo import Repo
-from os.path import join, exists
+from os.path import join, exists, isfile
 from pytz import timezone
 
 TZ_PARIS = timezone("Europe/Paris")
@@ -31,7 +31,9 @@ def create_tree(commit, output):
     Create the tree structure for the commit
     Return the list of full file paths for the commit, from the output dir
     '''
-    paths = []
+    paths_added = []
+    paths_removed = []
+
     for item in commit[1]:
         parent_path = item["path"].strip()
         if not exists(join(output, parent_path)):
@@ -40,48 +42,65 @@ def create_tree(commit, output):
             fullpath = join(parent_path, "%s.md" % item["titre"])
             with open(join(output, fullpath), "w") as file:
                 write_item_file(item, file)
-            paths.append(fullpath)
+            paths_added.append(fullpath)
         else:
             fullpath = join(parent_path, "README.md")
             with open(join(output, fullpath), "w") as file:
                 write_item_file(item, file)
-            paths.append(fullpath)
-    return paths
+            paths_added.append(fullpath)
 
-if len(sys.argv) < 3:
-    raise ValueError("Usage: python import-rg.py <source> <target>")
+    existing = list_files(output, "")
+    paths_removed = [path for path in existing if path not in paths_added]
+    for p in paths_removed:
+        os.remove(join(output,p))
+    return paths_added, paths_removed
 
-#items = sorted(rg_parse.parse(sys.argv[1]), key=lambda item: item["date_vigueur"])
-items = rg_parse.parse(sys.argv[1])
-dates = sorted(set(map(lambda item: item["date_vigueur"], items)))
+def list_files(source, accumulator):
+    found = [join(accumulator, f) for f in os.listdir(source) if isfile(join(source, f))]
+    for d in [f for f in os.listdir(source) if not isfile(join(source, f)) and not f.startswith(".")]:
+        found.extend(list_files(join(source, d), join(accumulator, d)))
+    return found
 
-commits = [(date, [item for item in items if item["date_vigueur"] == date]) for date in dates]
 
-# for i in range(0,1):
-#     print(str(commits[i][0]) + " -> " + str(len(commits[i][1])) + " items at that date")
-#     for j in range(0,3):
-#         print("   Path: %s" % commits[i][1][j]["path"])
+if __name__ == "__main__":
 
-repo_loc = sys.argv[2]
-if exists(repo_loc):
-    print("Deleting existing output directory: %s" % repo_loc)
-    shutil.rmtree(repo_loc)
+    if len(sys.argv) < 3:
+        raise ValueError("Usage: python import-rg.py <source> <target>")
 
-os.mkdir(repo_loc)
-repo = Repo.init(repo_loc)
+    # items = rg_parse.parse(sys.argv[1])
+    # dates = sorted(set(map(lambda item: item["date_vigueur"], items)))
+    #
+    # commits = [(date, [item for item in items if item["date_vigueur"] == date]) for date in dates]
 
-print("Importing %d commits" % len(commits))
+    items = rg_parse.parse(sys.argv[1])
+    dates = sorted(set(map(lambda item: item[0], items)))
+    commits = [(date, [item[1] for item in items if item[0] == date]) for date in dates]
 
-for i, commit in enumerate(commits):
-    date = commit[0]
-    print("Commit %d dated %s, %d items" % (i, str(date), len(commit[1])))
-    paths = create_tree(commit, repo_loc)
-    # for path in set(paths):
-    #     print("     %s" % path)
-    repo.stage([path.encode(sys.getfilesystemencoding()) for path in set(paths)])
+    repo_loc = sys.argv[2]
+    if exists(repo_loc):
+        print("Deleting existing output directory: %s" % repo_loc)
+        shutil.rmtree(repo_loc)
 
-    repo.do_commit(
-        bytes("RG entré en vigueur le %s" % date.strftime(FMT), "UTF-8"),
-        committer=bytes("Règlement général <rg@amf-france.org>", "UTF-8"),
-        commit_timestamp=date.timestamp(),
-        commit_timezone=int(TZ_PARIS.localize(date).strftime("%z")) * 36)
+    os.mkdir(repo_loc)
+    repo = Repo.init(repo_loc)
+
+    print("Importing %d commits" % len(commits))
+
+    for i, commit in enumerate(commits[0:5]):
+        date = commit[0]
+        print("Commit %d dated %s, %d items" % (i, str(date), len(commit[1])))
+        paths_added, paths_removed = create_tree(commit, repo_loc)
+        repo.stage([path.encode(sys.getfilesystemencoding()) for path in set(paths_added)])
+
+        print("  Removing %d files" % len(paths_removed))
+        index = repo.open_index()
+        for p in paths_removed:
+            print("  Removed: %s" % p)
+            del index[p.encode(sys.getfilesystemencoding())]
+        index.write()
+
+        repo.do_commit(
+            bytes("Règlement général en version du: %s" % date.strftime(FMT), "UTF-8"),
+            committer=bytes("Règlement général <rg@amf-france.org>", "UTF-8"),
+            commit_timestamp=date.timestamp(),
+            commit_timezone=int(TZ_PARIS.localize(date).strftime("%z")) * 36)

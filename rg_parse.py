@@ -17,8 +17,10 @@ def parse_file(file):
     print("Parsing file: %s" % file)
     tree = ET.parse(file)
     items = parse_item(tree.getroot().find("item"), "")
+    file_date_s = re.sub(r'([0-9]+)_RG.*', r'\1', basename(file))
+    file_date = datetime.datetime.strptime(file_date_s, '%Y%m%d')
     # export(items, file)
-    return items
+    return [(file_date, item) for item in items]
 
 def parse_item(item, path):
     titre = item.find("versions/version/titre")
