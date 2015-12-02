@@ -6,7 +6,7 @@ import os
 from os.path import isfile, join, basename
 import re
 import sys
-import unicodedata
+import requests
 
 def parse(source):
     files = [join(source,f) for f in os.listdir(source) if isfile(join(source, f)) and f.endswith(".htm")]
@@ -15,12 +15,28 @@ def parse(source):
 
 def parse_file(file):
     print("Parsing file: %s" % file)
-    tree = ET.parse(file)
-    items = parse_item(tree.getroot().find("item"), "")
-    file_date_s = re.sub(r'([0-9]+)_RG.*', r'\1', basename(file))
-    file_date = datetime.datetime.strptime(file_date_s, '%Y%m%d')
-    # export(items, file)
-    return [(file_date, item) for item in items]
+
+    file_id = re.sub(r'^.+RG_([0-9a-f\-]+)\.htm', r'\1', basename(file))
+
+    url = "http://amf-france.org/Reglementation/Reglement-general-et-instructions/Archives-du-reglement-general/Reglement-general.html?rgId=workspace%3A%2F%2FSpacesStore%2F" + file_id
+    r = requests.get(url)
+
+    if r.status_code == 200:
+        page = r.text
+        file_date_s = re.search(r'Règlement général en vigueur du ([0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9])', page).group(1)
+        print("  Found date: %s" % file_date_s)
+        file_date = datetime.datetime.strptime(file_date_s, '%d/%m/%Y')
+
+        tree = ET.parse(file)
+        items = parse_item(tree.getroot().find("item"), "")
+
+        # file_date_s = re.sub(r'([0-9]+)_RG.*', r'\1', basename(file))
+        # file_date = datetime.datetime.strptime(file_date_s, '%Y%m%d')
+        # export(items, file)
+        return [(file_date, item) for item in items]
+    else:
+        print("  Got status: %03d: ignoring RG id %s" % (r.status_code, file_id))
+        return []
 
 def parse_item(item, path):
     titre = item.find("versions/version/titre")
