@@ -7,10 +7,12 @@
 import shutil
 import sys
 import os
-import rg_parse
+
 from dulwich.repo import Repo
 from os.path import join, exists, isfile
 from pytz import timezone
+
+import rg_parse, content_cleaner as cc
 
 TZ_PARIS = timezone("Europe/Paris")
 FMT = "%d/%m/%Y"
@@ -19,10 +21,10 @@ def write_item_file(item, file):
     file.write(item["titre"])
     file.write("\n")
     file.write(len(item["titre"]) * "=")
-    file.write("\n\n")
-    file.write("Date de modification: %s\n" % item["date_modif"].strftime(FMT))
-    file.write("Date d'entrée en vigueur: %s\n\n" % item["date_vigueur"].strftime(FMT))
-    file.write(item["content"])
+    # file.write("\n\n")
+    # file.write("Date de modification: %s\n" % item["date_modif"].strftime(FMT))
+    # file.write("Date d'entrée en vigueur: %s\n\n" % item["date_vigueur"].strftime(FMT))
+    file.write(cc.clean(item["content"]))
     file.write("\n")
 
 
@@ -86,7 +88,7 @@ if __name__ == "__main__":
 
     print("Importing %d commits" % len(commits))
 
-    for i, commit in enumerate(commits[0:5]):
+    for i, commit in enumerate(commits):
         date = commit[0]
         print("Commit %d dated %s, %d items" % (i, str(date), len(commit[1])))
         paths_added, paths_removed = create_tree(commit, repo_loc)
