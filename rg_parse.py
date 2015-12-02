@@ -9,7 +9,7 @@ import sys
 import unicodedata
 
 def parse(source):
-    files = [join(source,f) for f in os.listdir(source) if isfile(join(source, f)) and f.endswith(".xml")]
+    files = [join(source,f) for f in os.listdir(source) if isfile(join(source, f)) and f.endswith(".htm")]
     return [item for f in files for item in parse_file(f)]
 
 
