@@ -8,6 +8,7 @@ def clean(content):
     content = re.sub(r'\t', '', content) # remove tabs
     content = re.sub(r'<blockquote>', r'> ', content)
     content = re.sub(r'<[^>]+>', r'', content)
+    content = re.sub(r'\s*\n', r'\n', content)
     return content
 
 def despan(text):
