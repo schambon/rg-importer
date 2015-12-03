@@ -9,10 +9,10 @@ import sys
 import os
 
 from dulwich.repo import Repo
-from os.path import join, exists, isfile
+from os.path import join, exists, isfile, basename
 from pytz import timezone
 
-import rg_parse, content_cleaner as cc
+import rg_parse, content_cleaner as cc, toc
 
 TZ_PARIS = timezone("Europe/Paris")
 FMT = "%d/%m/%Y"
@@ -55,6 +55,9 @@ def create_tree(commit, output):
     paths_removed = [path for path in existing if path not in paths_added]
     for p in paths_removed:
         os.remove(join(output,p))
+
+    toc.create_toc(join(output, os.listdir(output)[0]))
+
     return paths_added, paths_removed
 
 def list_files(source, accumulator):
