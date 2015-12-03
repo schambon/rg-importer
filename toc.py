@@ -25,12 +25,26 @@ class Node:
             return "{branch name: %s, children: [\n%s\n]}" % (self.name, ",\n".join(str(c) for c in self.children))
 
 
-def create_toc(base):
+def create_toc(base, recursion = 1):
+    '''
+    Create the table of contents by exploring the file system
+    Arguments:
+    - base: the base directory to start the exploration on
+    - recursion: if None, then create a ToC without depth limit.
+                 if 1, then create a 1-level ToC that points to unlimited-level sub-ToCs
+                 Optionally in the future we may support > 1 recursion
+    '''
     root = explore(base)
-    # print("---\nFound tree:\n---\n%s" % str(root))
 
-    toc = "".join([serialize_from(c, join(base, c.name), 0, "") for c in root.children])
-    readme = join(base, "README.md")
+    write_toc(base, root, recursion)
+    if recursion is not None:
+        for level in root.children:
+            write_toc(join(base, level.name), level, None)
+
+
+def write_toc(folder, tree, recursion):
+    toc = "".join([serialize_from(c, join(folder, c.name), 0, "", recursion) for c in tree.children])
+    readme = join(folder, "README.md")
     with open(readme, "a") as file:
         file.write("\n")
         file.write(toc)
@@ -42,7 +56,8 @@ def explore(source):
     else:
         return Node(basename(source), [explore(join(source,c)) for c in os.listdir(source) if not basename(c) == "README.md"])
 
-def serialize_from(node, folder, indent, accumulator):
+def serialize_from(node, folder, indent, accumulator, recursion):
+    rec = recursion - 1 if recursion is not None else None
     if node.leaf():
         return ("  " * indent) + "1. [" + node.name.replace(".md", "") + "](" + accumulator + node.name + ")\n"
     else:
@@ -50,12 +65,13 @@ def serialize_from(node, folder, indent, accumulator):
         with open(readme, "r") as r:
             title = r.readline().strip()
         result = ("  " * indent) + "1. [" + title + "](" + accumulator + node.name + ")\n"
-        for n in node.children:
-            c = join(folder, n.name)
-            if exists(c):
-                result = result + serialize_from(n, c, indent + 1, accumulator + node.name + "/")
-            else:
-                print("Ooops, child %s not found in path %s" % (n.name, folder))
+        if rec is not 0:
+            for n in node.children:
+                c = join(folder, n.name)
+                if exists(c):
+                    result = result + serialize_from(n, c, indent + 1, accumulator + node.name + "/", rec)
+                else:
+                    print("Ooops, child %s not found in path %s" % (n.name, folder))
 
         return result
 
