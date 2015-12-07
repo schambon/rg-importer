@@ -9,6 +9,8 @@ import sys
 import os
 
 from dulwich.repo import Repo
+from dulwich.objectspec import parse_object
+from dulwich.objects import Commit, Tag
 from os.path import join, exists, isfile, basename
 from pytz import timezone
 
@@ -16,6 +18,7 @@ import rg_parse, content_cleaner as cc, toc
 
 TZ_PARIS = timezone("Europe/Paris")
 FMT = "%d/%m/%Y"
+ISO_8601 = "%Y-%m-%d"
 
 def write_item_file(item, file):
     file.write(item["titre"])
@@ -104,8 +107,27 @@ if __name__ == "__main__":
             del index[p.encode(sys.getfilesystemencoding())]
         index.write()
 
+        author = bytes("Règlement général <rg@amf-france.org>", "UTF-8")
+
         repo.do_commit(
             bytes("Règlement général en version du: %s" % date.strftime(FMT), "UTF-8"),
-            committer=bytes("Règlement général <rg@amf-france.org>", "UTF-8"),
+            committer=author,
             commit_timestamp=date.timestamp(),
             commit_timezone=int(TZ_PARIS.localize(date).strftime("%z")) * 36)
+
+        ## create tag
+        tag_name = bytes(date.strftime(ISO_8601), "UTF-8")
+        object = parse_object(repo, "HEAD")
+        tag = Tag()
+        tag.tagger = author
+        tag.name = tag_name
+        tag.message = b''
+        tag.object = (type(object), object.id)
+        tag.tag_time = date.timestamp()
+        tag.tag_timezone = int(TZ_PARIS.localize(date).strftime("%z")) * 36
+        repo.object_store.add_object(tag)
+        tag_id = tag.id
+
+        repo.refs[b'refs/tags/' + tag_name] = tag_id
+
+    repo.close()
