@@ -8,6 +8,8 @@ import shutil
 import sys
 import os
 
+import time
+
 from dulwich.repo import Repo
 from dulwich.objectspec import parse_object
 from dulwich.objects import Commit, Tag
@@ -126,7 +128,7 @@ if __name__ == "__main__":
         tag.name = tag_name
         tag.message = b''
         tag.object = (type(object), object.id)
-        tag.tag_time = date.timestamp()
+        tag.tag_time = int(time.time())
         tag.tag_timezone = int(TZ_PARIS.localize(date).strftime("%z")) * 36
         repo.object_store.add_object(tag)
         tag_id = tag.id
