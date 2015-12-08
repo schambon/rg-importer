@@ -9,21 +9,27 @@ import sys
 import requests
 
 def parse(source):
-    files = [join(source,f) for f in os.listdir(source) if isfile(join(source, f)) and f.endswith(".htm")]
+    files = [join(source,f) for f in os.listdir(source) if isfile(join(source, f))
+                and re.search(r'\.html?$', f) is not None]
     return [item for f in files for item in parse_file(f)]
 
 
 def parse_file(file):
     print("Parsing file: %s" % file)
 
-    file_id = re.sub(r'^.+RG_([0-9a-f\-]+)\.htm', r'\1', basename(file))
+    file_id = re.sub(r'^.+RG_([0-9a-f\-]+)\.html?', r'\1', basename(file))
 
     url = "http://amf-france.org/Reglementation/Reglement-general-et-instructions/Archives-du-reglement-general/Reglement-general.html?rgId=workspace%3A%2F%2FSpacesStore%2F" + file_id
     r = requests.get(url)
 
     if r.status_code == 200:
         page = r.text
-        file_date_s = re.search(r'Règlement général en vigueur du ([0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9])', page).group(1)
+        match = re.search(r'Règlement général en vigueur du ([0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9])', page)
+        if match is None:
+            print("  Page does not contain RG validity date, skipping")
+            print("  (for reference, URL=%s)" % url)
+            return []
+        file_date_s = match.group(1)
         print("  Found date: %s" % file_date_s)
         file_date = datetime.datetime.strptime(file_date_s, '%d/%m/%Y')
 
