@@ -35,7 +35,7 @@ def write_item_file(item, file):
     file.write("\n")
 
 
-def create_tree(commit, output):
+def create_tree(commit, output, readme=True):
     '''
     Create the tree structure for the commit
     Return the list of full file paths for the commit, from the output dir
@@ -52,20 +52,34 @@ def create_tree(commit, output):
             with open(join(output, fullpath), "w") as file:
                 write_item_file(item, file)
             paths_added.append(fullpath)
-        else:
+        elif readme:
             fullpath = join(parent_path, "README.md")
             with open(join(output, fullpath), "w") as file:
                 write_item_file(item, file)
             paths_added.append(fullpath)
 
     existing = list_files(output, "")
+
+    base = join(output, os.listdir(output)[0])
+    print("Base is: %s" % base)
+    ## Whatever happens, there'll be a README at the root
+    paths_added.append(join(basename(base), "README.md"))
+
     paths_removed = [path for path in existing if path not in paths_added]
     for p in paths_removed:
         os.remove(join(output,p))
     prune(output)
 
-    toc.create_toc(join(output, os.listdir(output)[0]))
-
+    if readme:
+        toc.create_toc(base)
+    else:
+        print("Writing TOC")
+        toc_md = toc.compute_toc(base, commit[1])
+        with open(join(base, "README.md"), "w") as file:
+            file.write("%s\n" % basename(base))
+            file.write("=" * len(basename(base)))
+            file.write("\n\n")
+            file.write(toc_md)
     return paths_added, paths_removed
 
 def list_files(source, accumulator):
@@ -102,11 +116,14 @@ if __name__ == "__main__":
     for i, commit in enumerate(commits):
         date = commit[0]
         print("Commit %d dated %s, %d items" % (i, str(date), len(commit[1])))
-        paths_added, paths_removed = create_tree(commit, repo_loc)
+        paths_added, paths_removed = create_tree(commit, repo_loc, readme=False)
         repo.stage([path.encode(sys.getfilesystemencoding()) for path in set(paths_added)])
 
-        print("  Removing %d files" % len(paths_removed))
         index = repo.open_index()
+        for x in index:
+            print("    %s" % x)
+
+        print("  Removing %d files" % len(paths_removed))
         for p in paths_removed:
             print("  Removed: %s" % p)
             del index[p.encode(sys.getfilesystemencoding())]
