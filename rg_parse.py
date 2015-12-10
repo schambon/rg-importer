@@ -54,7 +54,7 @@ def parse_item(item, path):
     date_vigueur = datetime.datetime.strptime(item.find('versions/version/dateVigueur').text.strip(), '%Y-%m-%d')
     date_modif = datetime.datetime.strptime(item.find('versions/version/dateModification').text.strip(), '%Y-%m-%d')
 
-    this = {"titre": s_titre, "content": s_content, "date_vigueur": date_vigueur, "date_modif": date_modif}
+    this = {"titre": s_titre, "name": s_titre, "content": s_content, "date_vigueur": date_vigueur, "date_modif": date_modif}
 
     # est-ce une feuille de l'arbre ?
     this["leaf"] = True if len(item.findall("items/item")) is 0 else False

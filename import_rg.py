@@ -16,7 +16,7 @@ from dulwich.objects import Commit, Tag
 from os.path import join, exists, isfile, basename
 from pytz import timezone
 
-import rg_parse, content_cleaner as cc, toc
+import rg_parse, content_cleaner as cc, toc, toc2
 from prune import prune
 
 
@@ -28,14 +28,11 @@ def write_item_file(item, file):
     file.write(item["titre"])
     file.write("\n")
     file.write(len(item["titre"]) * "=")
-    # file.write("\n\n")
-    # file.write("Date de modification: %s\n" % item["date_modif"].strftime(FMT))
-    # file.write("Date d'entrée en vigueur: %s\n\n" % item["date_vigueur"].strftime(FMT))
     file.write(cc.clean(item["content"]))
     file.write("\n")
 
 
-def create_tree(commit, output, readme=True):
+def create_tree(commit, output, readme=True, main={}):
     '''
     Create the tree structure for the commit
     Return the list of full file paths for the commit, from the output dir
@@ -48,7 +45,7 @@ def create_tree(commit, output, readme=True):
         if not exists(join(output, parent_path)):
             os.makedirs(join(output, parent_path))
         if item["leaf"]:
-            fullpath = join(parent_path, "%s.md" % item["titre"])
+            fullpath = join(parent_path, "%s.md" % item["name"])
             with open(join(output, fullpath), "w") as file:
                 write_item_file(item, file)
             paths_added.append(fullpath)
@@ -60,10 +57,12 @@ def create_tree(commit, output, readme=True):
 
     existing = list_files(output, "")
 
-    base = join(output, os.listdir(output)[0])
+#    base = join(output, os.listdir(output)[0])
+    base = output
     print("Base is: %s" % base)
     ## Whatever happens, there'll be a README at the root
-    paths_added.append(join(basename(base), "README.md"))
+    # paths_added.append(join(basename(base), "README.md"))
+    paths_added.append("README.md")
 
     paths_removed = [path for path in existing if path not in paths_added]
     for p in paths_removed:
@@ -74,10 +73,18 @@ def create_tree(commit, output, readme=True):
         toc.create_toc(base)
     else:
         print("Writing TOC")
-        toc_md = toc.compute_toc(base, commit[1])
+        # toc_md = toc.compute_toc(base, commit[1])
+        toc_md = toc2.compute_toc(commit[1])
         with open(join(base, "README.md"), "w") as file:
-            file.write("%s\n" % basename(base))
-            file.write("=" * len(basename(base)))
+            if "name" in main:
+                file.write("%s\n" % main["name"])
+                file.write("=" * len(main["name"]))
+                file.write("\n\n")
+                file.write(main["title"] + "\n")
+                file.write("\n\n".join(main["content"].split("\n")))
+            else:
+                file.write("%s\n" % basename(base))
+                file.write("=" * len(basename(base)))
             file.write("\n\n")
             file.write(toc_md)
     return paths_added, paths_removed
@@ -88,40 +95,30 @@ def list_files(source, accumulator):
         found.extend(list_files(join(source, d), join(accumulator, d)))
     return found
 
-
-if __name__ == "__main__":
-
-    if len(sys.argv) < 3:
-        raise ValueError("Usage: python import-rg.py <source> <target>")
-
-    # items = rg_parse.parse(sys.argv[1])
-    # dates = sorted(set(map(lambda item: item["date_vigueur"], items)))
-    #
-    # commits = [(date, [item for item in items if item["date_vigueur"] == date]) for date in dates]
-
-    items = rg_parse.parse(sys.argv[1])
-    dates = sorted(set(map(lambda item: item[0], items)))
-    commits = [(date, [item[1] for item in items if item[0] == date]) for date in dates]
-
-    repo_loc = sys.argv[2]
+def do_import(commits, repo_loc, overwrite = True, author="Règlement général <rg@amf-france.org>"):
     if exists(repo_loc):
-        print("Deleting existing output directory: %s" % repo_loc)
-        shutil.rmtree(repo_loc)
+        if overwrite:
+            print("Deleting existing output directory: %s" % repo_loc)
+            shutil.rmtree(repo_loc)
 
-    os.mkdir(repo_loc)
-    repo = Repo.init(repo_loc)
+            os.mkdir(repo_loc)
+            repo = Repo.init(repo_loc)
+        else:
+            repo = Repo(repo_loc)
+    else:
+        os.mkdir(repo_loc)
+        repo = Repo.init(repo_loc)
 
-    print("Importing %d commits" % len(commits))
+
+    print("Importing %d commit(s)" % len(commits))
 
     for i, commit in enumerate(commits):
         date = commit[0]
         print("Commit %d dated %s, %d items" % (i, str(date), len(commit[1])))
-        paths_added, paths_removed = create_tree(commit, repo_loc, readme=False)
+        paths_added, paths_removed = create_tree(commit, repo_loc, readme=False, main=commit[2] if len(commit) == 3 else {})
         repo.stage([path.encode(sys.getfilesystemencoding()) for path in set(paths_added)])
 
         index = repo.open_index()
-        for x in index:
-            print("    %s" % x)
 
         print("  Removing %d files" % len(paths_removed))
         for p in paths_removed:
@@ -129,10 +126,10 @@ if __name__ == "__main__":
             del index[p.encode(sys.getfilesystemencoding())]
         index.write()
 
-        author = bytes("Règlement général <rg@amf-france.org>", "UTF-8")
+        author = bytes(author, "UTF-8")
 
         repo.do_commit(
-            bytes("Règlement général en version du: %s" % date.strftime(FMT), "UTF-8"),
+            bytes("Version du %s" % date.strftime(FMT), "UTF-8"),
             committer=author,
             commit_timestamp=date.timestamp(),
             commit_timezone=int(TZ_PARIS.localize(date).strftime("%z")) * 36)
@@ -153,3 +150,16 @@ if __name__ == "__main__":
         repo.refs[b'refs/tags/' + tag_name] = tag_id
 
     repo.close()
+
+
+
+if __name__ == "__main__":
+
+    if len(sys.argv) < 3:
+        raise ValueError("Usage: python import-rg.py <source> <target>")
+
+    items = rg_parse.parse(sys.argv[1])
+    dates = sorted(set(map(lambda item: item[0], items)))
+    commits = [(date, [item[1] for item in items if item[0] == date]) for date in dates]
+
+    repo_loc = sys.argv[2]

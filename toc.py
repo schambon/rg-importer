@@ -55,7 +55,7 @@ def explore(source, path):
     if isfile(source):
         return Node(basename(source), path=path)
     else:
-        return Node(basename(source), [explore(join(source,c), join(path,c)) for c in os.listdir(source) if not basename(c) == "README.md"], path=path)
+        return Node(basename(source), [explore(join(source,c), join(path,c)) for c in os.listdir(source) if basename(c) != "README.md" and basename(c) != ".git"], path=path)
 
 def serialize_from(node, folder, indent, accumulator, recursion=None, labels=None):
     rec = recursion - 1 if recursion is not None else None
@@ -84,7 +84,8 @@ def serialize_from(node, folder, indent, accumulator, recursion=None, labels=Non
 def compute_toc(folder, items):
     print("Folder is %s" % basename(folder))
     root = explore(folder, "")
-    labels = dict(zip([re.sub(r'^%s/(.+)/$' % basename(folder), r'\1',i["path"].strip()) for i in items if not i["leaf"]], [i["titre"].strip() for i in items if not i["leaf"]]))
+    # labels = dict(zip([re.sub(r'^%s/(.+)/$' % basename(folder), r'\1',i["path"].strip()) for i in items if not i["leaf"]], [i["titre"].strip() for i in items if not i["leaf"]]))
+    labels = dict(zip([i["path"].strip() for i in items if not i["leaf"]], [i["titre"].strip() for i in items if not i["leaf"]]))
 
     return "".join([serialize_from(c, join(folder, c.name), 0, "", labels=labels) for c in root.children])
 
