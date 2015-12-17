@@ -95,7 +95,7 @@ def list_files(source, accumulator):
         found.extend(list_files(join(source, d), join(accumulator, d)))
     return found
 
-def do_import(commits, repo_loc, overwrite = True, author="Règlement général <rg@amf-france.org>"):
+def do_import(commits, repo_loc, overwrite = True, author_="Règlement général <rg@amf-france.org>"):
     if exists(repo_loc):
         if overwrite:
             print("Deleting existing output directory: %s" % repo_loc)
@@ -115,6 +115,7 @@ def do_import(commits, repo_loc, overwrite = True, author="Règlement général 
     for i, commit in enumerate(commits):
         date = commit[0]
         print("Commit %d dated %s, %d items" % (i, str(date), len(commit[1])))
+        print("  authored by %s" % author_)
         paths_added, paths_removed = create_tree(commit, repo_loc, readme=False, main=commit[2] if len(commit) == 3 else {})
         repo.stage([path.encode(sys.getfilesystemencoding()) for path in set(paths_added)])
 
@@ -122,11 +123,10 @@ def do_import(commits, repo_loc, overwrite = True, author="Règlement général 
 
         print("  Removing %d files" % len(paths_removed))
         for p in paths_removed:
-            print("  Removed: %s" % p)
             del index[p.encode(sys.getfilesystemencoding())]
         index.write()
 
-        author = bytes(author, "UTF-8")
+        author = bytes(author_, "UTF-8")
 
         repo.do_commit(
             bytes("Version du %s" % date.strftime(FMT), "UTF-8"),
@@ -163,3 +163,5 @@ if __name__ == "__main__":
     commits = [(date, [item[1] for item in items if item[0] == date]) for date in dates]
 
     repo_loc = sys.argv[2]
+
+    do_import(commits, repo_loc)

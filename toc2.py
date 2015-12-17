@@ -32,11 +32,9 @@ def compute_toc(items):
     for item in items:
         if not item["leaf"]:
             # either nest or pop
-            print("Comparing %s with %s" % (item["path"], node.path))
             if item["path"].count('/') <= node.path.count('/'):
                 while not item["path"].count('/') > node.path.count('/') and not node.root():
                     node = node.pop()
-                    print("Popping")
             if node.root(): print("At root")
             n = Node(item["name"] , item["titre"], item["path"])
             node.push(n)
